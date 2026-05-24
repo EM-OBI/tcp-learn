@@ -21,35 +21,56 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # Bind socket to address
 server.bind(ADDR)
 
+# Create list to handle all connected clients
+Clients = []
 
 #create list of messages
-# msg = 
-
-
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
+    Clients.append(conn)
 
     connected = True
     while connected: 
         # This is blocking and waits to receive message from client
-        msg_length = conn.recv(HEADER).decode(FORMAT)
+        try: 
+            msg_length = conn.recv(HEADER).decode(FORMAT)
 
-        if msg_length: 
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
+            if msg_length: 
+                msg_length = int(msg_length)
+                msg = conn.recv(msg_length).decode(FORMAT)
 
-            if msg == DISCONNECT_MESSAGE:
-                connected = False
+                if msg == DISCONNECT_MESSAGE:
+                    connected = False
 
-            print(f"[{addr}] {msg}")
-            conn.send("Msg received".encode(FORMAT))
-    
+                #Call broadcast
+                broadcast(conn, addr, msg)
+                # print(f"[{addr}] {msg}")
+            
+            else: 
+                break
+        
+        except (ConnectionResetError, ConnectionAbortedError):
+
+            print(f"[DISCONNECT] {addr} lost connection unexpectedly")
+
+            break
+
+        except Exception as e:
+
+            print(f"[ERROR] {addr}: {e}")
+
+            break
+            
+    # cleanup
+    if conn in Clients:
+        Clients.remove(conn)
+
     conn.close()
-
+    print(f"[CLOSED] {addr}")
 
 # Start server and listen for new connections
 def start():
-    server.listen()
+    server.listen(3)
     print(f"Server is listening on {SERVER}")
     while True:
         # Use blocking
@@ -62,6 +83,15 @@ def start():
         # Show us the number of threads running i.e. all the connections
         print(f"ACTIVE CONNECTIONS {threading.active_count() - 1}")
 
+# Create broadcast functionality
+def broadcast(sender_conn, sender_addr, msg):
+    message = f"[{sender_addr}] {msg}".encode(FORMAT)
+
+    for client in Clients: 
+        if client != sender_conn:
+            client.send(message)
+
+    
 
 
 # Call start
